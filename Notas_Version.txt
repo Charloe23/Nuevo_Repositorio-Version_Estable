@@ -1,0 +1,10 @@
+La version 2.1.1.1 no esta enviando la señal RF porque la funcion enviarRF_Matriz esta vacia.
+
+
+Probando Version 2.1.2.5
+Funciona muy bien falta implementar el boton al pin 2 para que envie el RF de prueba.
+La LoRa envia el RF muy bien, falta corregir que de la interfaz los demas botones 
+funcionen porque solo muestra la imagen 1 cuando presiono un boton en la interfaz, y 
+tambien que envie la señal RF de prueba desde la interfaz
+
+La parte del codigo esta funcionando a la perfeccion, solo falta agregar las imagenes del pichon y la parte de la interfaz
