@@ -21,7 +21,7 @@ AsyncWebServer server(80);
 extern String Version;
 extern SENSOR activo;
 extern void enviarPorLora(String msg);
-extern void mostrarImagen(const unsigned char* imagen, int tipo );
+extern void mostrarImagen(const unsigned char* imagen, int tipo);
 extern const unsigned char img2[];
 
 void animacionCarga() {
@@ -32,38 +32,6 @@ void animacionCarga() {
         delay(200);
     }
     Serial.println("\rCargando... ¡Listo!");
-}
-
-void procesarArchivoJSON(const char* path, AsyncWebServerRequest* request) {
-    DynamicJsonDocument doc(256);
-    doc["version"] = Version;
-
-    File file = SPIFFS.open(path, "r");
-    if (!file) {
-        imprimir("No se pudo abrir el archivo JSON para leer");
-        doc["error"] = "No se pudo abrir el archivo";
-        String respuesta;
-        serializeJson(doc, respuesta);
-        request->send(500, "application/json", respuesta);
-        return;
-    }
-
-    DeserializationError error = deserializeJson(doc, file);
-    file.close();
-    if (error) {
-        imprimir("Error al parsear el JSON");
-        doc["error"] = "JSON no válido";
-        String respuesta;
-        serializeJson(doc, respuesta);
-        request->send(400, "application/json", respuesta);
-        return;
-    }
-
-    imprimir("JSON recibido y procesado correctamente");
-    doc["mensaje"] = "Archivo recibido y procesado";
-    String respuesta;
-    serializeJson(doc, respuesta);
-    request->send(200, "application/json", respuesta);
 }
 
 void endpointsMProg(void *pvParameters) {
@@ -89,6 +57,68 @@ void endpointsMProg(void *pvParameters) {
         AsyncWebServerResponse *response = request->beginResponse(SPIFFS, "/interfaz.html.gz", "text/html");
         response->addHeader("Content-encoding", "gzip");
         request->send(response);
+    });
+
+    server.on("/cambiar-imagen", HTTP_POST, [](AsyncWebServerRequest *request){
+        if(request->hasParam("body", true)) {
+            String body = request->getParam("body", true)->value();
+            DynamicJsonDocument doc(256);
+            deserializeJson(doc, body);
+
+            int imagen = doc["imagen"] | 1;
+            int id = doc["id"] | activo.id;
+            int zona = doc["zona"] | activo.zona;
+            int tipo = doc["tipo"] | activo.tipo;
+
+            // Construir mensaje LoRa
+            String loraMsg = "IMG:" + String(imagen) + "," + String(id) + "," + String(zona) + "," + String(tipo);
+            enviarPorLora(loraMsg);
+
+            DynamicJsonDocument response(200);
+            response["status"] = "success";
+            response["message"] = "Imagen cambiada";
+            response["imagen"] = imagen;
+
+            String jsonResponse;
+            serializeJson(response, jsonResponse);
+            request->send(200, "application/json", jsonResponse);
+
+            Serial.println("\n[IMAGEN] Cambio solicitado: " + String(imagen));
+        } else {
+            request->send(400, "text/plain", "Falta el cuerpo de la solicitud");
+        }
+    });
+
+    server.on("/enviar-rf", HTTP_POST, [](AsyncWebServerRequest *request){
+        if(request->hasParam("body", true)) {
+            String body = request->getParam("body", true)->value();
+            DynamicJsonDocument doc(256);
+            deserializeJson(doc, body);
+
+            String comando = doc["comando"] | "";
+            int id = doc["id"] | activo.id;
+            int zona = doc["zona"] | activo.zona;
+            int tipo = doc["tipo"] | activo.tipo;
+
+            // Construir mensaje LoRa
+            String loraMsg = "RF:" + String(id) + "," + String(zona) + "," + String(tipo);
+            enviarPorLora(loraMsg);
+
+            DynamicJsonDocument response(200);
+            response["status"] = "success";
+            response["message"] = "Señal RF enviada";
+            response["id"] = id;
+            response["zona"] = zona;
+            response["tipo"] = tipo;
+
+            String jsonResponse;
+            serializeJson(response, jsonResponse);
+            request->send(200, "application/json", jsonResponse);
+
+            Serial.println("\n[RF] Señal enviada: " + loraMsg);
+        } else {
+            request->send(400, "text/plain", "Falta el cuerpo de la solicitud");
+        }
     });
 
     server.on("/leer-parametros", HTTP_GET, [](AsyncWebServerRequest *request){
@@ -189,15 +219,14 @@ void endpointsMProg(void *pvParameters) {
         Serial.println("Tipo: " + String(tipoEnviar));
     });
 
-server.on("/reiniciar", HTTP_POST, [](AsyncWebServerRequest *request) {
-    // Apagar el LED antes de reiniciar
-    digitalWrite(LED_PIN, LOW);
-    delay(100); // Pequeño delay para asegurar que se apague
-    
-    request->send(200, "text/plain", "Reiniciando tarjeta...");
-    delay(100);
-    ESP.restart();
-});
+    server.on("/reiniciar", HTTP_POST, [](AsyncWebServerRequest *request) {
+        digitalWrite(LED_PIN, LOW);
+        delay(100);
+        
+        request->send(200, "text/plain", "Reiniciando tarjeta...");
+        delay(100);
+        ESP.restart();
+    });
 
     server.begin();
     
@@ -211,14 +240,13 @@ void entrarModoProgramacion() {
     modoprog = true;
     esp_task_wdt_reset();
     
-    // Encender el LED al entrar en modo programación
     digitalWrite(LED_PIN, HIGH);
     
     vTaskDelay(1000 / portTICK_PERIOD_MS);
     
     if (!SPIFFS.begin(true)) {
         imprimir("Error al montar SPIFFS");
-        digitalWrite(LED_PIN, LOW);  // Apagar LED si hay error
+        digitalWrite(LED_PIN, LOW);
         return;
     }
     

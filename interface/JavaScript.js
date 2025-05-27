@@ -1,4 +1,3 @@
-// Esperar a que el DOM esté listo
 document.addEventListener('DOMContentLoaded', function () {
     const menuButton = document.getElementById('Menu');
     const slidingMenu = document.getElementById('menu');
@@ -27,14 +26,19 @@ document.addEventListener('DOMContentLoaded', function () {
             slidingMenu.classList.remove('abierto');
         });
     });
+    
+    // Mostrar resumen al cargar
+    mostrarResumen();
 });
 
 function mostrarCargando() {
     const pantalla = document.getElementById("pantalla-carga");
     pantalla.style.display = "flex";
-    setTimeout(() => {
-        pantalla.style.display = "none";
-    }, 3000);
+}
+
+function ocultarCargando() {
+    const pantalla = document.getElementById("pantalla-carga");
+    pantalla.style.display = "none";
 }
 
 function showContent(contentId) {
@@ -52,9 +56,11 @@ function showContent(contentId) {
             <form id="form-parametros-form">
                 <label for="alarm-id">ID de la Alarma (4 dígitos):</label>
                 <input type="text" id="alarm-id" name="alarm-id" maxlength="4" pattern="\\d{4}" required>
+                <div id="error-alarm-id" class="error-message">Debe ingresar exactamente 4 dígitos</div>
 
                 <label for="zona">Zona (1 - 510):</label>
                 <input type="number" id="zona" name="zona" min="1" max="510" required>
+                <div id="error-zona" class="error-message">La zona debe ser entre 1 y 510 (3 dígitos)</div>
 
                 <label for="sensor">Tipo de Sensor:</label>
                 <select id="sensor" name="sensor" required>
@@ -76,6 +82,25 @@ function showContent(contentId) {
         </div>
         `;
 
+        // Validación en tiempo real
+        document.getElementById("alarm-id").addEventListener("input", function(e) {
+            const errorElement = document.getElementById("error-alarm-id");
+            if(this.value.length !== 4 || !/^\d+$/.test(this.value)) {
+                errorElement.style.display = "block";
+            } else {
+                errorElement.style.display = "none";
+            }
+        });
+        
+        document.getElementById("zona").addEventListener("input", function(e) {
+            const errorElement = document.getElementById("error-zona");
+            if(this.value < 1 || this.value > 510 || this.value.length !== 3) {
+                errorElement.style.display = "block";
+            } else {
+                errorElement.style.display = "none";
+            }
+        });
+
         // Cargar valores actuales desde la EEPROM
         fetch("/leer-parametros")
             .then(response => response.json())
@@ -83,7 +108,9 @@ function showContent(contentId) {
                 if(data.id) document.getElementById("alarm-id").value = data.id;
                 if(data.zona) document.getElementById("zona").value = data.zona;
                 if(data.tipo) document.getElementById("sensor").value = data.tipo;
-            });
+                ocultarCargando();
+            })
+            .catch(() => ocultarCargando());
 
         document.getElementById("form-parametros-form").addEventListener("submit", function(event) {
             event.preventDefault();
@@ -97,11 +124,13 @@ function showContent(contentId) {
                 return;
             }
 
-            if(zona < 1 || zona > 510) {
-                alert("La zona debe estar entre 1 y 510");
+            if(zona < 1 || zona > 510 || zona.toString().length !== 3) {
+                alert("La zona debe estar entre 1 y 510 y tener 3 dígitos");
                 return;
             }
 
+            mostrarCargando();
+            
             // Enviar datos al servidor
             fetch("/guardar-parametros", {
                 method: "POST",
@@ -112,27 +141,64 @@ function showContent(contentId) {
             })
             .then(response => response.json())
             .then(data => {
+                ocultarCargando();
                 if(data.status === "success") {
-                    alert(`Datos guardados en EEPROM:\nID: ${alarmId}\nZona: ${zona}\nTipo: ${sensor}`);
+                    const mensajeRF = `${alarmId}${zona.toString().padStart(3, '0')}${sensor}`;
+                    alert(`Datos guardados en EEPROM:\nID: ${alarmId}\nZona: ${zona}\nTipo: ${sensor}\n\nSeñal RF: ${mensajeRF}`);
+                    
+                    // Mostrar en el monitor
+                    const monitor = document.getElementById("monitor");
+                    if (monitor) {
+                        monitor.innerHTML += `<p>ID: ${alarmId} Zona: ${zona.toString().padStart(3, '0')} Tipo: ${sensor}</p>`;
+                        monitor.innerHTML += `<p>Enviando Señal RF: ${mensajeRF}</p>`;
+                    }
                 } else {
                     alert("Error al guardar en EEPROM: " + (data.message || ""));
                 }
             })
             .catch(error => {
+                ocultarCargando();
                 alert("Error de conexión: " + error.message);
             });
         });
     } else if (contentId === 'timer') {
         timerSection.style.display = "block";
+        ocultarCargando();
+    } else if (contentId === 'pruebas') {
+        contenido.innerHTML = `
+        <div class="pruebas-container">
+            <h2>Pruebas RF</h2>
+            <div class="rf-buttons">
+                <button onclick="leerRF()" class="btn-rf">Leer Señal RF</button>
+                <button onclick="enviarRF()" class="btn-rf">Enviar Señal RF</button>
+            </div>
+            <div id="rf-display" class="rf-display"></div>
+            
+            <h2>Selección de Imágenes</h2>
+            <div class="image-buttons">
+                <button onclick="seleccionarImagen(1)">Imagen 1</button>
+                <button onclick="seleccionarImagen(2)">Imagen 2</button>
+                <button onclick="seleccionarImagen(3)">Imagen 3</button>
+                <button onclick="seleccionarImagen(4)">Imagen 4</button>
+                <button onclick="seleccionarImagen(5)">Imagen 5</button>
+                <button onclick="seleccionarImagen(6)">Imagen 6</button>
+                <button onclick="seleccionarImagen(7)">Imagen 7</button>
+                <button onclick="seleccionarImagen(8)">Imagen 8</button>
+                <button onclick="seleccionarImagen(9)">Imagen 9</button>
+            </div>
+        </div>
+        `;
+        ocultarCargando();
     }
 }
 
 function leerRF() {
     const rfDisplay = document.getElementById("rf-display");
-
+    
     rfDisplay.innerHTML = `
-    <div style="text-align: center;">
-    <img src="esperando.png" alt="Enviando señal" style="width: 80px;"><br><small>Enviando señal RF...</small>
+    <div class="rf-image-container">
+        <img src="esperando.png" alt="Enviando señal"><br>
+        <small>Enviando señal RF...</small>
     </div>
     `;
 
@@ -148,25 +214,131 @@ function leerRF() {
     .then(data => {
         if(data.status === "success") {
             rfDisplay.innerHTML = `
-            <div style="text-align: center;">
-            <img src="rf-ok.png" alt="Señal enviada" style="width: 80px;"><br><small>Señal RF enviada</small>
+            <div class="rf-image-container">
+                <img src="rf-ok.png" alt="Señal enviada"><br>
+                <small>Señal RF enviada</small>
             </div>
-            <div style="text-align: center;">
-            <img src="rf-ok.png" alt="ID" style="width: 80px;"><br><small>ID: ${data.id || '?'}</small>
+            <div class="rf-image-container">
+                <img src="rf-ok.png" alt="ID"><br>
+                <small>ID: ${data.id || '?'}</small>
             </div>
-            <div style="text-align: center;">
-            <img src="rf-ok.png" alt="Zona" style="width: 80px;"><br><small>Zona: ${data.zona || '?'}</small>
+            <div class="rf-image-container">
+                <img src="rf-ok.png" alt="Zona"><br>
+                <small>Zona: ${data.zona || '?'}</small>
             </div>
-            <div style="text-align: center;">
-            <img src="rf-ok.png" alt="Tipo" style="width: 80px;"><br><small>Tipo: ${data.tipo || '?'}</small>
+            <div class="rf-image-container">
+                <img src="rf-ok.png" alt="Tipo"><br>
+                <small>Tipo: ${data.tipo || '?'}</small>
             </div>
             `;
+            
+            // Mostrar en el monitor
+            const monitor = document.getElementById("monitor");
+            if (monitor) {
+                monitor.innerHTML += `<p>ID: ${data.id} Zona: ${data.zona} Tipo: ${data.tipo}</p>`;
+                const mensajeRF = `${data.id}${data.zona.toString().padStart(3, '0')}${data.tipo}`;
+                monitor.innerHTML += `<p>Enviando Señal RF: ${mensajeRF}</p>`;
+            }
         } else {
-            rfDisplay.innerHTML = "<p style='color:red;'>Error al enviar señal RF: " + (data.message || "") + "</p>";
+            rfDisplay.innerHTML = `<div class="rf-image-container" style="grid-column: 1 / -1;">
+                <img src="rf-error.png" alt="Error"><br>
+                <small>Error: ${data.message || "Error desconocido"}</small>
+            </div>`;
         }
     })
     .catch(error => {
-        rfDisplay.innerHTML = "<p style='color:red;'>Error de conexión: " + error.message + "</p>";
+        rfDisplay.innerHTML = `<div class="rf-image-container" style="grid-column: 1 / -1;">
+            <img src="rf-error.png" alt="Error"><br>
+            <small>Error de conexión: ${error.message}</small>
+        </div>`;
+    });
+}
+
+function enviarRF() {
+    mostrarCargando();
+    
+    fetch("/leer-parametros")
+        .then(response => response.json())
+        .then(data => {
+            if(data.id && data.zona && data.tipo) {
+                const id = data.id.toString().padStart(4, '0');
+                const zona = data.zona.toString().padStart(3, '0');
+                const tipo = data.tipo;
+                const mensajeRF = `${id}${zona}${tipo}`;
+                
+                // Mostrar en el monitor
+                const monitor = document.getElementById("monitor");
+                if (monitor) {
+                    monitor.innerHTML += `<p>ID: ${id} Zona: ${zona} Tipo: ${tipo}</p>`;
+                    monitor.innerHTML += `<p>Enviando Señal RF: ${mensajeRF}</p>`;
+                }
+                
+                // Enviar señal RF
+                fetch("/enviar-rf", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({
+                        comando: "enviar_rf",
+                        id: id,
+                        zona: zona,
+                        tipo: tipo
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    ocultarCargando();
+                    if(data.status === "success") {
+                        alert(`Señal RF enviada correctamente: ${mensajeRF}`);
+                    } else {
+                        alert("Error al enviar señal RF: " + (data.message || ""));
+                    }
+                })
+                .catch(error => {
+                    ocultarCargando();
+                    alert("Error de conexión: " + error.message);
+                });
+            } else {
+                ocultarCargando();
+                alert("No se encontraron parámetros configurados");
+            }
+        })
+        .catch(error => {
+            ocultarCargando();
+            alert("Error al leer parámetros: " + error.message);
+        });
+}
+
+function seleccionarImagen(numeroImagen) {
+    mostrarCargando();
+    
+    // Enviar comando para cambiar imagen
+    fetch("/cambiar-imagen", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+        },
+        body: JSON.stringify({imagen: numeroImagen})
+    })
+    .then(response => response.json())
+    .then(data => {
+        ocultarCargando();
+        if(data.status === "success") {
+            alert(`Imagen ${numeroImagen} seleccionada correctamente`);
+            
+            // Mostrar en el monitor
+            const monitor = document.getElementById("monitor");
+            if (monitor) {
+                monitor.innerHTML += `<p>Imagen ${numeroImagen} seleccionada</p>`;
+            }
+        } else {
+            alert("Error al cambiar imagen: " + (data.message || ""));
+        }
+    })
+    .catch(error => {
+        ocultarCargando();
+        alert("Error de conexión: " + error.message);
     });
 }
 
@@ -177,6 +349,10 @@ function mostrarResumen() {
         <h2>📡 Resumen de Lecturas</h2>
         <div id="resumen-display" class="resumen-datos">
             <p>Cargando datos actuales...</p>
+        </div>
+        <div id="monitor" class="monitor-datos">
+            <h3>Monitor de Señales</h3>
+            <div class="monitor-content"></div>
         </div>
     </div>
     `;
@@ -199,7 +375,9 @@ function mostrarResumen() {
                 <span class="dato-valor">${getTipoSensorNombre(data.tipo) || 'No configurado'}</span>
             </div>
             `;
-        });
+            ocultarCargando();
+        })
+        .catch(() => ocultarCargando());
 }
 
 function getTipoSensorNombre(tipo) {
@@ -234,6 +412,7 @@ function salir() {
         fetch("/reiniciar", { method: "POST" })
             .then(() => {
                 setTimeout(() => {
+                    pantallaCarga.style.display = "none";
                     location.reload();
                 }, 5000);
             })
