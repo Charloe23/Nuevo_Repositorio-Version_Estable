@@ -61,39 +61,63 @@ void endpointsMProg(void *pvParameters) {
         request->send(response);
     });
 
-    server.on("/cambiar-imagen", HTTP_POST, [](AsyncWebServerRequest *request){
-        if(request->hasParam("body", true)) {
-            String body = request->getParam("body", true)->value();
-            JsonDocument doc;
-            deserializeJson(doc, body);
+   server.on("/cambiar-imagen", HTTP_POST, [](AsyncWebServerRequest *request){
+    // No respondemos aquí, respondemos en el body callback
+}, NULL, [](AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
+    // Leer cuerpo completo
+    String body = "";
+    for (size_t i = 0; i < len; i++) {
+        body += (char)data[i];
+    }
 
-            int imagen = doc["imagen"] | 1;
-            int id = doc["id"] | activo.id;
-            int zona = doc["zona"] | activo.zona;
-            int tipo = doc["tipo"] | activo.tipo;
+    DynamicJsonDocument doc(256);
+    DeserializationError error = deserializeJson(doc, body);
+    if (error) {
+        request->send(400, "application/json", "{\"error\":\"JSON inválido\"}");
+        return;
+    }
 
-            String loraMsg = "IMG:" + String(imagen) + "," + String(id) + "," + String(zona) + "," + String(tipo);
-            enviarPorLora(loraMsg);
+    int imagen = doc["imagen"] | 1;
 
-            JsonDocument response;
-            response["status"] = "success";
-            response["message"] = "Imagen cambiada";
-            response["imagen"] = imagen;
+    // Validar rango
+    if (imagen < 1 || imagen > 9) {
+        request->send(400, "application/json", "{\"error\":\"Número de imagen inválido (1-9)\"}");
+        return;
+    }
 
-            String jsonResponse;
-            serializeJson(response, jsonResponse);
-            request->send(200, "application/json", jsonResponse);
+    // Mostrar imagen según número
+switch (imagen) {
+    case 1: mostrarImagen(img1, 1); break;
+    case 2: mostrarImagen(img2, 1); break;
+    case 3: mostrarImagen(img3, 1); break;
+    case 4: mostrarImagen(img4, 1); break;
+    case 5: mostrarImagen(img5, 1); break;
+    case 6: mostrarImagen(img6, 1); break;
+    case 7: mostrarImagen(img7, 1); break;
+    case 8: mostrarImagen(img8, 1); break;
+    case 9: mostrarImagen(img9, 1); break;
+}
 
-            Serial.println("\n[IMAGEN] Cambio solicitado: " + String(imagen));
-        } else {
-            request->send(400, "text/plain", "Falta el cuerpo de la solicitud");
-        }
-    });
+    // Enviar mensaje LoRa si quieres
+    String loraMsg = "IMG:" + String(imagen);
+    enviarPorLora(loraMsg);
+
+    // Responder al cliente
+    DynamicJsonDocument res(128);
+    res["status"] = "success";
+    res["message"] = "Imagen cambiada";
+    res["imagen"] = imagen;
+    String jsonResponse;
+    serializeJson(res, jsonResponse);
+    request->send(200, "application/json", jsonResponse);
+
+    Serial.println("[IMAGEN] Cambio solicitado: " + String(imagen));
+});
 
     server.on("/enviar-rf", HTTP_POST, [](AsyncWebServerRequest *request){
         if(request->hasParam("body", true)) {
             String body = request->getParam("body", true)->value();
-            JsonDocument doc;
+            DynamicJsonDocument doc(256);
             deserializeJson(doc, body);
 
             String comando = doc["comando"] | "";
@@ -104,7 +128,7 @@ void endpointsMProg(void *pvParameters) {
             String loraMsg = "RF:" + String(id) + "," + String(zona) + "," + String(tipo);
             enviarPorLora(loraMsg);
 
-            JsonDocument response;
+            DynamicJsonDocument response(200);
             response["status"] = "success";
             response["message"] = "Señal RF enviada";
             response["id"] = id;
@@ -122,7 +146,7 @@ void endpointsMProg(void *pvParameters) {
     });
 
     server.on("/leer-parametros", HTTP_GET, [](AsyncWebServerRequest *request){
-        JsonDocument doc;
+        DynamicJsonDocument doc(200);
         doc["id"] = activo.id;
         doc["zona"] = activo.zona;
         doc["tipo"] = activo.tipo;
@@ -166,7 +190,7 @@ void endpointsMProg(void *pvParameters) {
             String loraMsg = "PARAM:" + String(activo.id) + "," + String(activo.zona) + "," + String(activo.tipo);
             enviarPorLora(loraMsg);
 
-            JsonDocument doc;
+            DynamicJsonDocument doc(200);
             doc["status"] = "success";
             doc["message"] = "Parámetros guardados correctamente";
             doc["id"] = activo.id;
@@ -199,7 +223,7 @@ void endpointsMProg(void *pvParameters) {
         transmisorRF.send(CODIGO_RF_PRUEBA, RF_BITS); 
         delay(100); 
 
-        JsonDocument doc;
+        DynamicJsonDocument doc(200);
         doc["status"] = "success";
         doc["message"] = "Señal RF enviada en modo prueba";
         doc["id"] = idEnviar;
