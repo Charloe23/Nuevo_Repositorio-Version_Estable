@@ -3,6 +3,7 @@
 
 #include <heltec.h>
 #include <Arduino.h>
+#include <ArduinoJson.h> 
 
 
 const unsigned char PROGMEM img1[] = {

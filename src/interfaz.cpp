@@ -1,13 +1,14 @@
-#include "main.h"
-#include "interfaz.h"
-#include "TransmisorRf.h"
-#include "Pantalla.h"
+#include "main.h" 
+#include "interfaz.h" 
+#include "TransmisorRf.h" 
+#include "Pantalla.h" 
 #include <SPIFFS.h>
 #include <WiFi.h>
 #include <esp_task_wdt.h>
 #include <ArduinoJson.h>
 #include <esp_system.h>
 #include <EEPROM.h>
+#include <ESPAsyncWebServer.h> 
 
 IPAddress local_IP(192, 168, 8, 28);
 IPAddress gateway(192, 168, 14, 1);
@@ -16,13 +17,15 @@ IPAddress subnet(255, 255, 255, 0);
 const char* ssidAP = "Probando";
 const char* passwordAP = "87654321";
 
-AsyncWebServer server(80);
+AsyncWebServer server(80); 
 
-extern String Version;
+extern String Version; 
 extern SENSOR activo;
-extern void enviarPorLora(String msg);
+extern void enviarPorLora(String msg); 
 extern void mostrarImagen(const unsigned char* imagen, int tipo);
-extern const unsigned char img2[];
+extern const unsigned char img2[]; 
+extern RCSwitch transmisorRF;
+extern void imprimir(String m, String c);
 
 void animacionCarga() {
     const char* estados[] = {"-", "\\", "|", "/"};
@@ -48,7 +51,6 @@ void endpointsMProg(void *pvParameters) {
     IPAddress IP = WiFi.softAPIP();
     imprimir("Punto de acceso creado: " + IP.toString());
 
-    // Configurar endpoints
     server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
         if (!SPIFFS.exists("/interfaz.html.gz")) {
             request->send(404, "text/plain", "Archivo no encontrado");
@@ -62,7 +64,7 @@ void endpointsMProg(void *pvParameters) {
     server.on("/cambiar-imagen", HTTP_POST, [](AsyncWebServerRequest *request){
         if(request->hasParam("body", true)) {
             String body = request->getParam("body", true)->value();
-            DynamicJsonDocument doc(256);
+            JsonDocument doc;
             deserializeJson(doc, body);
 
             int imagen = doc["imagen"] | 1;
@@ -70,11 +72,10 @@ void endpointsMProg(void *pvParameters) {
             int zona = doc["zona"] | activo.zona;
             int tipo = doc["tipo"] | activo.tipo;
 
-            // Construir mensaje LoRa
             String loraMsg = "IMG:" + String(imagen) + "," + String(id) + "," + String(zona) + "," + String(tipo);
             enviarPorLora(loraMsg);
 
-            DynamicJsonDocument response(200);
+            JsonDocument response;
             response["status"] = "success";
             response["message"] = "Imagen cambiada";
             response["imagen"] = imagen;
@@ -92,7 +93,7 @@ void endpointsMProg(void *pvParameters) {
     server.on("/enviar-rf", HTTP_POST, [](AsyncWebServerRequest *request){
         if(request->hasParam("body", true)) {
             String body = request->getParam("body", true)->value();
-            DynamicJsonDocument doc(256);
+            JsonDocument doc;
             deserializeJson(doc, body);
 
             String comando = doc["comando"] | "";
@@ -100,11 +101,10 @@ void endpointsMProg(void *pvParameters) {
             int zona = doc["zona"] | activo.zona;
             int tipo = doc["tipo"] | activo.tipo;
 
-            // Construir mensaje LoRa
             String loraMsg = "RF:" + String(id) + "," + String(zona) + "," + String(tipo);
             enviarPorLora(loraMsg);
 
-            DynamicJsonDocument response(200);
+            JsonDocument response;
             response["status"] = "success";
             response["message"] = "Señal RF enviada";
             response["id"] = id;
@@ -122,7 +122,7 @@ void endpointsMProg(void *pvParameters) {
     });
 
     server.on("/leer-parametros", HTTP_GET, [](AsyncWebServerRequest *request){
-        DynamicJsonDocument doc(200);
+        JsonDocument doc;
         doc["id"] = activo.id;
         doc["zona"] = activo.zona;
         doc["tipo"] = activo.tipo;
@@ -138,7 +138,6 @@ void endpointsMProg(void *pvParameters) {
             int nuevaZona = request->getParam("zona", true)->value().toInt();
             int nuevoTipo = request->getParam("tipo", true)->value().toInt();
 
-            // Validar parámetros
             if(nuevoId < 1000 || nuevoId > 9999) {
                 request->send(400, "text/plain", "ID debe ser de 4 dígitos");
                 return;
@@ -154,24 +153,20 @@ void endpointsMProg(void *pvParameters) {
                 return;
             }
 
-            // Actualizar estructura en memoria
             activo.id = nuevoId;
             activo.zona = nuevaZona;
             activo.tipo = nuevoTipo;
 
-            // Guardar en EEPROM
             EEPROM.put(0, activo);
             if(!EEPROM.commit()) {
                 request->send(500, "text/plain", "Error al guardar en EEPROM");
                 return;
             }
 
-            // Enviar por LoRa
             String loraMsg = "PARAM:" + String(activo.id) + "," + String(activo.zona) + "," + String(activo.tipo);
             enviarPorLora(loraMsg);
 
-            // Responder con éxito
-            DynamicJsonDocument doc(200);
+            JsonDocument doc;
             doc["status"] = "success";
             doc["message"] = "Parámetros guardados correctamente";
             doc["id"] = activo.id;
@@ -187,14 +182,13 @@ void endpointsMProg(void *pvParameters) {
             Serial.println("Zona: " + String(activo.zona));
             Serial.println("Tipo: " + String(activo.tipo));
             
-            mostrarImagen(img2); // Mostrar imagen de confirmación
+            mostrarImagen(img2); 
         } else {
             request->send(400, "text/plain", "Faltan parámetros");
         }
     });
 
     server.on("/enviar-rf-prueba", HTTP_POST, [](AsyncWebServerRequest *request){
-        // Usar valores guardados o valores por defecto
         int idEnviar = activo.id > 0 ? activo.id : 9999;
         int zonaEnviar = activo.zona > 0 ? activo.zona : 1;
         int tipoEnviar = activo.tipo > 0 ? activo.tipo : 9;
@@ -202,7 +196,10 @@ void endpointsMProg(void *pvParameters) {
         String loraMsg = "PRUEBA:" + String(idEnviar) + "," + String(zonaEnviar) + "," + String(tipoEnviar);
         enviarPorLora(loraMsg);
 
-        DynamicJsonDocument doc(200);
+        transmisorRF.send(CODIGO_RF_PRUEBA, RF_BITS); 
+        delay(100); 
+
+        JsonDocument doc;
         doc["status"] = "success";
         doc["message"] = "Señal RF enviada en modo prueba";
         doc["id"] = idEnviar;
@@ -217,10 +214,11 @@ void endpointsMProg(void *pvParameters) {
         Serial.println("ID: " + String(idEnviar));
         Serial.println("Zona: " + String(zonaEnviar));
         Serial.println("Tipo: " + String(tipoEnviar));
+        Serial.println("Código RF: " + String(CODIGO_RF_PRUEBA)); 
     });
 
     server.on("/reiniciar", HTTP_POST, [](AsyncWebServerRequest *request) {
-        digitalWrite(LED_PIN, LOW);
+        digitalWrite(LED_PIN, LOW); 
         delay(100);
         
         request->send(200, "text/plain", "Reiniciando tarjeta...");
@@ -229,30 +227,31 @@ void endpointsMProg(void *pvParameters) {
     });
 
     server.begin();
-    
+
     while (true) {
         vTaskDelay(1000 / portTICK_PERIOD_MS);
     }
 }
 
-void entrarModoProgramacion() {
+void entrarModoProgramacion() { 
     imprimir("Entrando a modo programación...");
-    modoprog = true;
+    extern bool modoprog;
+    modoprog = true; 
     esp_task_wdt_reset();
-    
-    digitalWrite(LED_PIN, HIGH);
-    
+
+    digitalWrite(LED_PIN, HIGH); 
+
     vTaskDelay(1000 / portTICK_PERIOD_MS);
-    
+
     if (!SPIFFS.begin(true)) {
         imprimir("Error al montar SPIFFS");
         digitalWrite(LED_PIN, LOW);
         return;
     }
-    
+
     imprimir("Activando Modo Programación...");
     xTaskCreatePinnedToCore(
-        endpointsMProg,
+        endpointsMProg, 
         "endpoints",
         8192,
         NULL,
@@ -260,7 +259,7 @@ void entrarModoProgramacion() {
         NULL,
         0
     );
-    
+
     imprimir("---# Modo Programación Activado #---", "verde");
 }
 

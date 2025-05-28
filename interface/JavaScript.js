@@ -26,7 +26,7 @@ document.addEventListener('DOMContentLoaded', function () {
             slidingMenu.classList.remove('abierto');
         });
     });
-    
+
     // Mostrar resumen al cargar
     mostrarResumen();
 });
@@ -43,11 +43,11 @@ function ocultarCargando() {
 
 function showContent(contentId) {
     const contenido = document.getElementById("contenido");
-    const timerSection = document.getElementById("timer");
+    const timerSection = document.getElementById("timer"); // Asumo que 'timer' es la sección de pruebas
 
     // Ocultar secciones
     contenido.innerHTML = "";
-    timerSection.style.display = "none";
+    // timerSection.style.display = "none"; // No ocultar la sección si es donde se muestra el contenido
 
     if (contentId === 'id_restore') {
         contenido.innerHTML = `
@@ -91,17 +91,20 @@ function showContent(contentId) {
                 errorElement.style.display = "none";
             }
         });
-        
+
         document.getElementById("zona").addEventListener("input", function(e) {
             const errorElement = document.getElementById("error-zona");
-            if(this.value < 1 || this.value > 510 || this.value.length !== 3) {
+            // Permite 1, 2 o 3 dígitos, pero valida el rango
+             if(this.value < 1 || this.value > 510 || !/^\d{1,3}$/.test(this.value)) {
                 errorElement.style.display = "block";
             } else {
                 errorElement.style.display = "none";
             }
         });
 
+
         // Cargar valores actuales desde la EEPROM
+        mostrarCargando(); // Mostrar cargando antes de la petición
         fetch("/leer-parametros")
             .then(response => response.json())
             .then(data => {
@@ -110,7 +113,11 @@ function showContent(contentId) {
                 if(data.tipo) document.getElementById("sensor").value = data.tipo;
                 ocultarCargando();
             })
-            .catch(() => ocultarCargando());
+            .catch((error) => {
+                 console.error("Error al cargar parámetros:", error);
+                 alert("Error al cargar parámetros: " + error.message);
+                 ocultarCargando();
+            });
 
         document.getElementById("form-parametros-form").addEventListener("submit", function(event) {
             event.preventDefault();
@@ -118,19 +125,27 @@ function showContent(contentId) {
             const zona = document.getElementById("zona").value;
             const sensor = document.getElementById("sensor").value;
 
-            // Validación adicional
+            // Validación adicional antes de enviar
             if(alarmId.length !== 4 || isNaN(alarmId)) {
                 alert("El ID de alarma debe ser exactamente 4 dígitos numéricos");
                 return;
             }
 
-            if(zona < 1 || zona > 510 || zona.toString().length !== 3) {
-                alert("La zona debe estar entre 1 y 510 y tener 3 dígitos");
-                return;
+            // Validar zona como número y rango
+            const zonaNum = parseInt(zona, 10);
+            if(isNaN(zonaNum) || zonaNum < 1 || zonaNum > 510) {
+                 alert("La zona debe ser un número entre 1 y 510");
+                 return;
             }
+             // Validar que la zona tenga 3 dígitos (si es un requisito estricto)
+             // if(zona.toString().length !== 3) {
+             //     alert("La zona debe tener 3 dígitos");
+             //     return;
+             // }
+
 
             mostrarCargando();
-            
+
             // Enviar datos al servidor
             fetch("/guardar-parametros", {
                 method: "POST",
@@ -145,7 +160,7 @@ function showContent(contentId) {
                 if(data.status === "success") {
                     const mensajeRF = `${alarmId}${zona.toString().padStart(3, '0')}${sensor}`;
                     alert(`Datos guardados en EEPROM:\nID: ${alarmId}\nZona: ${zona}\nTipo: ${sensor}\n\nSeñal RF: ${mensajeRF}`);
-                    
+
                     // Mostrar en el monitor
                     const monitor = document.getElementById("monitor");
                     if (monitor) {
@@ -162,18 +177,16 @@ function showContent(contentId) {
             });
         });
     } else if (contentId === 'timer') {
-        timerSection.style.display = "block";
-        ocultarCargando();
-    } else if (contentId === 'pruebas') {
+        // Este es el contenido para la sección "Pruebas"
         contenido.innerHTML = `
         <div class="pruebas-container">
             <h2>Pruebas RF</h2>
             <div class="rf-buttons">
                 <button onclick="leerRF()" class="btn-rf">Leer Señal RF</button>
-                <button onclick="enviarRF()" class="btn-rf">Enviar Señal RF</button>
+                
             </div>
             <div id="rf-display" class="rf-display"></div>
-            
+
             <h2>Selección de Imágenes</h2>
             <div class="image-buttons">
                 <button onclick="seleccionarImagen(1)">Imagen 1</button>
@@ -189,12 +202,26 @@ function showContent(contentId) {
         </div>
         `;
         ocultarCargando();
+    } else if (contentId === 'pruebas') {
+         // Parece que hay una duplicación o confusión aquí.
+         // El contenido para "Pruebas" debería estar en el 'timer' case según tu HTML.
+         // Si 'pruebas' es una sección diferente, necesitarías definir su contenido aquí.
+         // Por ahora, asumo que el contenido de "Pruebas" es lo que está en el 'timer' case.
+         // Si 'pruebas' debe mostrar algo diferente, por favor especifica.
+         contenido.innerHTML = `
+         <div class="pruebas-container">
+             <h2>Pruebas RF (Sección 'pruebas')</h2>
+             <p>Contenido específico para la sección 'pruebas' si es diferente de 'timer'.</p>
+             <!-- Agrega aquí el contenido que desees para esta sección -->
+         </div>
+         `;
+         ocultarCargando();
     }
 }
 
 function leerRF() {
     const rfDisplay = document.getElementById("rf-display");
-    
+
     rfDisplay.innerHTML = `
     <div class="rf-image-container">
         <img src="esperando.png" alt="Enviando señal"><br>
@@ -231,7 +258,7 @@ function leerRF() {
                 <small>Tipo: ${data.tipo || '?'}</small>
             </div>
             `;
-            
+
             // Mostrar en el monitor
             const monitor = document.getElementById("monitor");
             if (monitor) {
@@ -256,7 +283,7 @@ function leerRF() {
 
 function enviarRF() {
     mostrarCargando();
-    
+
     fetch("/leer-parametros")
         .then(response => response.json())
         .then(data => {
@@ -265,14 +292,14 @@ function enviarRF() {
                 const zona = data.zona.toString().padStart(3, '0');
                 const tipo = data.tipo;
                 const mensajeRF = `${id}${zona}${tipo}`;
-                
+
                 // Mostrar en el monitor
                 const monitor = document.getElementById("monitor");
                 if (monitor) {
                     monitor.innerHTML += `<p>ID: ${id} Zona: ${zona} Tipo: ${tipo}</p>`;
                     monitor.innerHTML += `<p>Enviando Señal RF: ${mensajeRF}</p>`;
                 }
-                
+
                 // Enviar señal RF
                 fetch("/enviar-rf", {
                     method: "POST",
@@ -312,7 +339,7 @@ function enviarRF() {
 
 function seleccionarImagen(numeroImagen) {
     mostrarCargando();
-    
+
     // Enviar comando para cambiar imagen
     fetch("/cambiar-imagen", {
         method: "POST",
@@ -326,7 +353,7 @@ function seleccionarImagen(numeroImagen) {
         ocultarCargando();
         if(data.status === "success") {
             alert(`Imagen ${numeroImagen} seleccionada correctamente`);
-            
+
             // Mostrar en el monitor
             const monitor = document.getElementById("monitor");
             if (monitor) {

@@ -1,39 +1,25 @@
-    #include "Pantalla.h"
-    #include "interfaz.h"
-    #include "TransmisorRf.h"
-    #include "main.h"
-    #include <RCSwitch.h>
-    #include <heltec.h>
-    #include <EEPROM.h>
-// --- RF
-RCSwitch receptorRF = RCSwitch();
-RCSwitch transmisorRF = RCSwitch();
+#include "Pantalla.h"
+#include "interfaz.h"
+#include "TransmisorRf.h"
+#include "main.h"
+#include <RCSwitch.h>
+#include <heltec.h>
+#include <EEPROM.h>
 
-// --- Códigos RF
-#define CODIGO_RF_GAS 33330001
-#define CODIGO_RF_PRUEBA 33330009
-#define RF_BITS 27
-
-// --- Variables
-String Version = "3.1.1.1";
+String Version = "3.2.3.9";
 const int EEPROM_SIZE = sizeof(SENSOR);
+
 boolean debug = true, variableDetectada = false, modoprog = false; 
 SENSOR activo{-1, -1, -1};
+RCSwitch transmisorRF;
 
-// --- Pines (usar los definidos en main.h excepto BOTON_PRUEBA_PIN)
-const int BOTON_PRUEBA_PIN = 2; // botón de prueba queda aquí
-// LED_PIN, MQ6_PIN, prog están definidos en main.h
-const int RECEPTOR_RF_PIN = 32;
-const int TRANSMISOR_RF_PIN = 33;
-
+const int BOTON_PRUEBA_PIN = 2;
 unsigned long tiempoUltimaImagen = 0;
 int imagenMostrada = 1;
 
-// --- Imágenes externas
 extern const unsigned char img1[], img2[], img3[], img4[], img5[], img6[], img7[], img8[];
 
-// --- Funciones auxiliares
-void imprimir(String m, String c ) {
+void imprimir(String m, String c) {
     if (!debug) return;
     const char* col = "\033[0m";
     if (c == "rojo") col = "\033[31m";
@@ -85,17 +71,15 @@ void blinkLed() {
     }
 }
 
-// --- Entradas locales
 void manejarEntradas() {
     static unsigned long t = 0, progStart = 0;
     static bool esperandoLiberar = false;
     static bool botonAnterior = HIGH;
 
     int mq6 = digitalRead(MQ6_PIN);
-    int progEstado = digitalRead(prog);
+    int progEstado = digitalRead(PIN_PROG);
     int estadoBoton = digitalRead(BOTON_PRUEBA_PIN);
 
-    // Modo programación
     if (progEstado == LOW) {
         if (!progStart) progStart = millis();
         if (!modoprog && millis() - progStart >= 2000 && !esperandoLiberar) {
@@ -115,31 +99,22 @@ void manejarEntradas() {
             t = millis();
         }
 
-        // --- Alerta de gas
-      if (mq6 == LOW && !variableDetectada) {
-    enviarPorLora("ALERTA: Gas detectado");
-    transmisorRF.send(CODIGO_RF_GAS, RF_BITS);  // <--- ARREGLADO
-    delay(100);  // asegurar transmisión
-    Serial.println("Enviando señal de gas: " + String(CODIGO_RF_GAS));
-    mostrarImagenPorTipoSensor(0);
-    blinkLed();
-    variableDetectada = true;
-    imprimir("¡Gas detectado! Alerta enviada.", "rojo");
-} else if (mq6 == HIGH) {
-    variableDetectada = false;
-}
+        if (mq6 == LOW && !variableDetectada) {
+            enviarPorLora("ALERTA: Gas detectado");
+            mostrarImagenPorTipoSensor(0);
+            blinkLed();
+            variableDetectada = true;
+            imprimir("¡Gas detectado! Alerta enviada.", "rojo");
+        } else if (mq6 == HIGH) {
+            variableDetectada = false;
+        }
 
-
-        // --- Botón de prueba
-    if (estadoBoton == LOW && botonAnterior == HIGH) {
-    enviarPorLora("PRUEBA: Botón pulsado");
-    transmisorRF.send(CODIGO_RF_PRUEBA, RF_BITS);  // <--- ARREGLADO
-    delay(100);  // asegurar transmisión
-    Serial.println("Enviando señal de botón de prueba: " + String(CODIGO_RF_PRUEBA));
-    blinkLed();
-    mostrarImagen(img2);
-    imprimir("Prueba RF enviada", "verde");
-}
+        if (estadoBoton == LOW && botonAnterior == HIGH) {
+            enviarPorLora("PRUEBA: Botón pulsado");
+            blinkLed();
+            mostrarImagen(img2);
+            imprimir("Prueba RF enviada", "verde");
+        }
         botonAnterior = estadoBoton;
     }
 
@@ -148,28 +123,6 @@ void manejarEntradas() {
     }
 }
 
-// --- Recepción RF
-void manejarRecepcionRF() {
-    if (receptorRF.available()) {
-        unsigned long codigo = receptorRF.getReceivedValue();
-        imprimir("RF recibido: " + String(codigo), "cyan");
-        Serial.println("[DEBUG] Código recibido: " + String(codigo));
-
-        if (codigo == CODIGO_RF_GAS) {
-            mostrarImagen(img3);
-            blinkLed();
-            imprimir("¡Alerta RF recibida! Código de gas", "rojo");
-        } else if (codigo == CODIGO_RF_PRUEBA) {
-            mostrarImagen(img2);
-            blinkLed();
-            imprimir("Prueba RF recibida", "verde");
-        }
-
-        receptorRF.resetAvailable();
-    }
-}
-
-// --- Setup
 void setup() {
     Serial.begin(115200);
     EEPROM.begin(EEPROM_SIZE);
@@ -191,24 +144,22 @@ void setup() {
 
     pinMode(MQ6_PIN, INPUT_PULLUP);
     pinMode(LED_PIN, OUTPUT);
-    pinMode(prog, INPUT_PULLUP);
+    pinMode(PIN_PROG, INPUT_PULLUP);
     pinMode(BOTON_PRUEBA_PIN, INPUT_PULLUP);
+
+    // Configuración del transmisor RF
+    transmisorRF.enableTransmit(14); // Pin 14 para transmisión RF
+    transmisorRF.setProtocol(1);
+    transmisorRF.setPulseLength(350);
 
     Heltec.begin(true, false, true);
     mostrarInicio();
 
-    receptorRF.enableReceive(RECEPTOR_RF_PIN);
-    transmisorRF.enableTransmit(TRANSMISOR_RF_PIN);
-
-    imprimir("Receptor RF activado en pin " + String(RECEPTOR_RF_PIN), "cyan");
-    imprimir("Transmisor RF configurado en pin " + String(TRANSMISOR_RF_PIN), "cyan");
     imprimir("Sistema iniciado correctamente", "verde");
 }
 
-// --- Loop principal
 void loop() {
     if (!modoprog) {
         manejarEntradas();
-        manejarRecepcionRF();
     }
 }
