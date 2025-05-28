@@ -15,6 +15,7 @@
 #define prog 0
 #define ROWS 3
 #define COLS 3
+  // Este lo defines en el código, no en main.h, lo dejamos aquí
 
 struct SENSOR {
   int id;
