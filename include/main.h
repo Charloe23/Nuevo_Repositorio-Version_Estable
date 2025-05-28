@@ -20,7 +20,9 @@
 
 // Configuración RF
 const int RF_BITS = 24;
-const int CODIGO_RF_PRUEBA = 12345678;
+const int CODIGO_RF_PRUEBA = 33330001;
+const int CODIGO_RF_GAS = 33339001;  // Añade esta línea
+
 
 // Estructura de sensor
 struct SENSOR {

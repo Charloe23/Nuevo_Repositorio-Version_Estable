@@ -213,32 +213,37 @@ switch (imagen) {
     });
 
     server.on("/enviar-rf-prueba", HTTP_POST, [](AsyncWebServerRequest *request){
-        int idEnviar = activo.id > 0 ? activo.id : 9999;
-        int zonaEnviar = activo.zona > 0 ? activo.zona : 1;
-        int tipoEnviar = activo.tipo > 0 ? activo.tipo : 9;
-
-        String loraMsg = "PRUEBA:" + String(idEnviar) + "," + String(zonaEnviar) + "," + String(tipoEnviar);
-        enviarPorLora(loraMsg);
-
-        transmisorRF.send(CODIGO_RF_PRUEBA, RF_BITS); 
-        delay(100); 
+        transmisorRF.send(CODIGO_RF_PRUEBA, RF_BITS);
+        delay(100);
 
         DynamicJsonDocument doc(200);
         doc["status"] = "success";
-        doc["message"] = "Señal RF enviada en modo prueba";
-        doc["id"] = idEnviar;
-        doc["zona"] = zonaEnviar;
-        doc["tipo"] = tipoEnviar;
+        doc["message"] = "Señal RF de prueba enviada";
+        doc["codigo"] = CODIGO_RF_PRUEBA;
+        doc["bits"] = RF_BITS;
 
         String response;
         serializeJson(doc, response);
         request->send(200, "application/json", response);
 
-        Serial.println("\n[PRUEBA] Señal RF enviada:");
-        Serial.println("ID: " + String(idEnviar));
-        Serial.println("Zona: " + String(zonaEnviar));
-        Serial.println("Tipo: " + String(tipoEnviar));
-        Serial.println("Código RF: " + String(CODIGO_RF_PRUEBA)); 
+        Serial.println("\n[PRUEBA] Señal RF enviada. Código: " + String(CODIGO_RF_PRUEBA));
+    });
+
+    server.on("/enviar-rf-alerta", HTTP_POST, [](AsyncWebServerRequest *request){
+        transmisorRF.send(CODIGO_RF_GAS, RF_BITS);
+        delay(100);
+
+        DynamicJsonDocument doc(200);
+        doc["status"] = "success";
+        doc["message"] = "Señal RF de alerta enviada";
+        doc["codigo"] = CODIGO_RF_GAS;
+        doc["bits"] = RF_BITS;
+
+        String response;
+        serializeJson(doc, response);
+        request->send(200, "application/json", response);
+
+        Serial.println("\n[ALERTA] Señal RF enviada. Código: " + String(CODIGO_RF_GAS));
     });
 
     server.on("/reiniciar", HTTP_POST, [](AsyncWebServerRequest *request) {

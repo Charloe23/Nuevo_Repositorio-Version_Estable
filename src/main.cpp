@@ -6,26 +6,26 @@
 #include <heltec.h>
 #include <EEPROM.h>
 
-// --- Códigos RF
-#define CODIGO_RF_GAS 33330001
-#define CODIGO_RF_PRUEBA 33330009
-#define RF_BITS 27
-
-// --- Variables globales
-String Version = "3.3.3.9";
-const int EEPROM_SIZE = sizeof(SENSOR);
-
-boolean debug = true, variableDetectada = false, modoprog = false;
-SENSOR activo{-1, -1, -1};
+// --- Instancia RF
 RCSwitch transmisorRF;
 
+// --- Variables
+String Version = "3.6.7.15";
+const int EEPROM_SIZE = sizeof(SENSOR);
+boolean debug = true, variableDetectada = false, modoprog = false; 
+SENSOR activo{-1, -1, -1};
+
+// --- Pines (usando los definidos en main.h)
 const int BOTON_PRUEBA_PIN = 2;
+const int TRANSMISOR_RF_PIN = 33; // Asegúrate que coincide con tu hardware
+
 unsigned long tiempoUltimaImagen = 0;
 int imagenMostrada = 1;
 
+// --- Imágenes externas
 extern const unsigned char img1[], img2[], img3[], img4[], img5[], img6[], img7[], img8[];
 
-void imprimir(String m, String c) {
+void imprimir(String m, String c ) {
     if (!debug) return;
     const char* col = "\033[0m";
     if (c == "rojo") col = "\033[31m";
@@ -37,21 +37,23 @@ void imprimir(String m, String c) {
 
 void enviarPorLora(String mensaje) {
     Serial.println("[LoRa] " + mensaje);
-    // No tocar pantalla OLED aquí
+    
+    // Enviar por RF si es una alerta importante
+    if (mensaje.indexOf("ALERTA:") >= 0) {
+        transmisorRF.send(CODIGO_RF_GAS, RF_BITS);
+        Serial.println("[RF] Señal de alerta enviada: " + String(CODIGO_RF_GAS));
+    } else if (mensaje.indexOf("PRUEBA:") >= 0) {
+        transmisorRF.send(CODIGO_RF_PRUEBA, RF_BITS);
+        Serial.println("[RF] Señal de prueba enviada: " + String(CODIGO_RF_PRUEBA));
+    }
 }
 
 void mostrarImagen(const unsigned char* imagen, int tipo) {
     Heltec.display->clear();
     Heltec.display->drawXbm(0, 0, 128, 64, imagen);
     Heltec.display->display();
-
     imagenMostrada = tipo;
-
-    if (tipo == 2) {
-        tiempoUltimaImagen = millis(); // Se borra después
-    } else {
-        tiempoUltimaImagen = 0; // Nunca se borra automáticamente
-    }
+    if (tipo == 2) tiempoUltimaImagen = millis();
 }
 
 void mostrarInicio() {
@@ -88,6 +90,7 @@ void manejarEntradas() {
     int progEstado = digitalRead(PIN_PROG);
     int estadoBoton = digitalRead(BOTON_PRUEBA_PIN);
 
+    // Modo programación
     if (progEstado == LOW) {
         if (!progStart) progStart = millis();
         if (!modoprog && millis() - progStart >= 2000 && !esperandoLiberar) {
@@ -107,14 +110,9 @@ void manejarEntradas() {
             t = millis();
         }
 
-        // --- Sensor de gas (envía señal RF al detectar)
+        // --- Alerta de gas con RF
         if (mq6 == LOW && !variableDetectada) {
             enviarPorLora("ALERTA: Gas detectado");
-
-            // ✅ Enviar señal RF de gas
-            transmisorRF.send(CODIGO_RF_GAS, RF_BITS);
-            Serial.println("[RF] Señal GAS enviada: " + String(CODIGO_RF_GAS));
-
             mostrarImagenPorTipoSensor(0);
             blinkLed();
             variableDetectada = true;
@@ -123,19 +121,13 @@ void manejarEntradas() {
             variableDetectada = false;
         }
 
-        // --- Botón de prueba (envía señal RF al pulsar)
+        // --- Botón de prueba con RF
         if (estadoBoton == LOW && botonAnterior == HIGH) {
             enviarPorLora("PRUEBA: Botón pulsado");
-
-            // ✅ Enviar señal RF de prueba
-            transmisorRF.send(CODIGO_RF_PRUEBA, RF_BITS);
-            Serial.println("[RF] Señal PRUEBA enviada: " + String(CODIGO_RF_PRUEBA));
-
             blinkLed();
             mostrarImagen(img2);
             imprimir("Prueba RF enviada", "verde");
         }
-
         botonAnterior = estadoBoton;
     }
 
@@ -149,7 +141,7 @@ void setup() {
     EEPROM.begin(EEPROM_SIZE);
     EEPROM.get(0, activo);
 
-    if (activo.id < 1000 || activo.id > 9999 ||
+    if (activo.id < 1000 || activo.id > 9999 || 
         activo.zona < 1 || activo.zona > 510 ||
         activo.tipo < 0 || activo.tipo > 9) {
         imprimir("Datos EEPROM inválidos, restaurando valores por defecto", "amarillo");
@@ -158,24 +150,23 @@ void setup() {
         EEPROM.commit();
     }
 
-    imprimir("Configuración inicial:", "verde");
-    imprimir("ID: " + String(activo.id));
-    imprimir("Zona: " + String(activo.zona));
-    imprimir("Tipo: " + String(activo.tipo));
+    // Configuración de pines
+    pinMode(MQ6_PIN, INPUT_PULLUP);
+    pinMode(LED_PIN, OUTPUT);
+    pinMode(PIN_PROG, INPUT_PULLUP);
+    pinMode(BOTON_PRUEBA_PIN, INPUT_PULLUP);
 
-    pinMode(MQ6_PIN, INPUT_PULLUP);         // MQ6 → pin 48
-    pinMode(LED_PIN, OUTPUT);               // LED
-    pinMode(PIN_PROG, INPUT_PULLUP);        // Botón de programación
-    pinMode(BOTON_PRUEBA_PIN, INPUT_PULLUP);// Botón de prueba
-
-    transmisorRF.enableTransmit(14);        // Pin para transmisión RF
+    // Configuración RF
+    transmisorRF.enableTransmit(TRANSMISOR_RF_PIN);
     transmisorRF.setProtocol(1);
     transmisorRF.setPulseLength(350);
 
+    // Inicialización OLED
     Heltec.begin(true, false, true);
     mostrarInicio();
 
     imprimir("Sistema iniciado correctamente", "verde");
+    imprimir("Transmisor RF configurado en pin " + String(TRANSMISOR_RF_PIN), "cyan");
 }
 
 void loop() {
