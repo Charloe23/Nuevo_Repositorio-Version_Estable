@@ -43,11 +43,10 @@ function ocultarCargando() {
 
 function showContent(contentId) {
     const contenido = document.getElementById("contenido");
-    const timerSection = document.getElementById("timer"); // Asumo que 'timer' es la sección de pruebas
+    const timerSection = document.getElementById("timer");
 
     // Ocultar secciones
     contenido.innerHTML = "";
-    // timerSection.style.display = "none"; // No ocultar la sección si es donde se muestra el contenido
 
     if (contentId === 'id_restore') {
         contenido.innerHTML = `
@@ -55,12 +54,12 @@ function showContent(contentId) {
             <h2>Formulario de Parámetros</h2>
             <form id="form-parametros-form">
                 <label for="alarm-id">ID de la Alarma (4 dígitos):</label>
-                <input type="text" id="alarm-id" name="alarm-id" maxlength="4" pattern="\\d{4}" required>
-                <div id="error-alarm-id" class="error-message">Debe ingresar exactamente 4 dígitos</div>
+                <input type="number" id="alarm-id" name="alarm-id" min="0" max="9999" required>
+                <div id="error-alarm-id" class="error-message">Debe ingresar exactamente 4 dígitos (0000-9999)</div>
 
-                <label for="zona">Zona (1 - 510):</label>
+                <label for="zona">Zona (001 - 510):</label>
                 <input type="number" id="zona" name="zona" min="1" max="510" required>
-                <div id="error-zona" class="error-message">La zona debe ser entre 1 y 510 (3 dígitos)</div>
+                <div id="error-zona" class="error-message">Debe ingresar exactamente 3 dígitos (001-510)</div>
 
                 <label for="sensor">Tipo de Sensor:</label>
                 <select id="sensor" name="sensor" required>
@@ -82,9 +81,13 @@ function showContent(contentId) {
         </div>
         `;
 
-        // Validación en tiempo real
+        // Validación en tiempo real para alarm-id (4 dígitos exactos)
         document.getElementById("alarm-id").addEventListener("input", function(e) {
             const errorElement = document.getElementById("error-alarm-id");
+            // Limitar a 4 dígitos
+            if (this.value.length > 4) {
+                this.value = this.value.slice(0, 4);
+            }
             if(this.value.length !== 4 || !/^\d+$/.test(this.value)) {
                 errorElement.style.display = "block";
             } else {
@@ -92,24 +95,29 @@ function showContent(contentId) {
             }
         });
 
+        // Validación en tiempo real para zona (3 dígitos exactos, 001-510)
         document.getElementById("zona").addEventListener("input", function(e) {
             const errorElement = document.getElementById("error-zona");
-            // Permite 1, 2 o 3 dígitos, pero valida el rango
-             if(this.value < 1 || this.value > 510 || !/^\d{1,3}$/.test(this.value)) {
+            // Limitar a 3 dígitos
+            if (this.value.length > 3) {
+                this.value = this.value.slice(0, 3);
+            }
+            // Validar que tenga exactamente 3 dígitos y esté en el rango correcto
+            const zonaNum = parseInt(this.value, 10);
+            if(isNaN(zonaNum) || zonaNum < 1 || zonaNum > 510 || !/^\d{3}$/.test(this.value)) {
                 errorElement.style.display = "block";
             } else {
                 errorElement.style.display = "none";
             }
         });
 
-
         // Cargar valores actuales desde la EEPROM
-        mostrarCargando(); // Mostrar cargando antes de la petición
+        mostrarCargando();
         fetch("/leer-parametros")
             .then(response => response.json())
             .then(data => {
-                if(data.id) document.getElementById("alarm-id").value = data.id;
-                if(data.zona) document.getElementById("zona").value = data.zona;
+                if(data.id) document.getElementById("alarm-id").value = data.id.toString().padStart(4, '0');
+                if(data.zona) document.getElementById("zona").value = data.zona.toString().padStart(3, '0');
                 if(data.tipo) document.getElementById("sensor").value = data.tipo;
                 ocultarCargando();
             })
@@ -126,23 +134,18 @@ function showContent(contentId) {
             const sensor = document.getElementById("sensor").value;
 
             // Validación adicional antes de enviar
-            if(alarmId.length !== 4 || isNaN(alarmId)) {
-                alert("El ID de alarma debe ser exactamente 4 dígitos numéricos");
+            const alarmIdNum = parseInt(alarmId, 10);
+            if (isNaN(alarmIdNum) || alarmIdNum < 0 || alarmIdNum > 9999 || alarmId.length !== 4) {
+                alert("El ID de alarma debe ser un número de exactamente 4 dígitos (0000-9999)");
                 return;
             }
 
-            // Validar zona como número y rango
+            // Validar zona como número, rango y exactamente 3 dígitos
             const zonaNum = parseInt(zona, 10);
-            if(isNaN(zonaNum) || zonaNum < 1 || zonaNum > 510) {
-                 alert("La zona debe ser un número entre 1 y 510");
-                 return;
+            if(isNaN(zonaNum) || zonaNum < 1 || zonaNum > 510 || zona.length !== 3) {
+                alert("La zona debe ser un número entre 001 y 510 (exactamente 3 dígitos)");
+                return;
             }
-             // Validar que la zona tenga 3 dígitos (si es un requisito estricto)
-             // if(zona.toString().length !== 3) {
-             //     alert("La zona debe tener 3 dígitos");
-             //     return;
-             // }
-
 
             mostrarCargando();
 
@@ -177,13 +180,11 @@ function showContent(contentId) {
             });
         });
     } else if (contentId === 'timer') {
-        // Este es el contenido para la sección "Pruebas"
         contenido.innerHTML = `
         <div class="pruebas-container">
             <h2>Pruebas RF</h2>
             <div class="rf-buttons">
                 <button onclick="leerRF()" class="btn-rf">Leer Señal RF</button>
-                
             </div>
             <div id="rf-display" class="rf-display"></div>
 
@@ -203,16 +204,10 @@ function showContent(contentId) {
         `;
         ocultarCargando();
     } else if (contentId === 'pruebas') {
-         // Parece que hay una duplicación o confusión aquí.
-         // El contenido para "Pruebas" debería estar en el 'timer' case según tu HTML.
-         // Si 'pruebas' es una sección diferente, necesitarías definir su contenido aquí.
-         // Por ahora, asumo que el contenido de "Pruebas" es lo que está en el 'timer' case.
-         // Si 'pruebas' debe mostrar algo diferente, por favor especifica.
          contenido.innerHTML = `
          <div class="pruebas-container">
              <h2>Pruebas RF (Sección 'pruebas')</h2>
-             <p>Contenido específico para la sección 'pruebas' si es diferente de 'timer'.</p>
-             <!-- Agrega aquí el contenido que desees para esta sección -->
+             <p>Contenido específico para la sección 'pruebas'.</p>
          </div>
          `;
          ocultarCargando();
@@ -229,7 +224,6 @@ function leerRF() {
     </div>
     `;
 
-    // Enviar comando para transmitir RF
     fetch("/enviar-rf-prueba", {
         method: "POST",
         headers: {
@@ -259,7 +253,6 @@ function leerRF() {
             </div>
             `;
 
-            // Mostrar en el monitor
             const monitor = document.getElementById("monitor");
             if (monitor) {
                 monitor.innerHTML += `<p>ID: ${data.id} Zona: ${data.zona} Tipo: ${data.tipo}</p>`;
@@ -293,14 +286,12 @@ function enviarRF() {
                 const tipo = data.tipo;
                 const mensajeRF = `${id}${zona}${tipo}`;
 
-                // Mostrar en el monitor
                 const monitor = document.getElementById("monitor");
                 if (monitor) {
                     monitor.innerHTML += `<p>ID: ${id} Zona: ${zona} Tipo: ${tipo}</p>`;
                     monitor.innerHTML += `<p>Enviando Señal RF: ${mensajeRF}</p>`;
                 }
 
-                // Enviar señal RF
                 fetch("/enviar-rf", {
                     method: "POST",
                     headers: {
@@ -340,7 +331,6 @@ function enviarRF() {
 function seleccionarImagen(numeroImagen) {
     mostrarCargando();
 
-    // Enviar comando para cambiar imagen
     fetch("/cambiar-imagen", {
         method: "POST",
         headers: {
@@ -354,7 +344,6 @@ function seleccionarImagen(numeroImagen) {
         if(data.status === "success") {
             alert(`Imagen ${numeroImagen} seleccionada correctamente`);
 
-            // Mostrar en el monitor
             const monitor = document.getElementById("monitor");
             if (monitor) {
                 monitor.innerHTML += `<p>Imagen ${numeroImagen} seleccionada</p>`;
@@ -384,18 +373,17 @@ function mostrarResumen() {
     </div>
     `;
 
-    // Obtener datos actuales
     fetch("/leer-parametros")
         .then(response => response.json())
         .then(data => {
             document.getElementById("resumen-display").innerHTML = `
             <div class="dato-item">
                 <span class="dato-label">ID Alarma:</span>
-                <span class="dato-valor">${data.id || 'No configurado'}</span>
+                <span class="dato-valor">${data.id ? data.id.toString().padStart(4, '0') : 'No configurado'}</span>
             </div>
             <div class="dato-item">
                 <span class="dato-label">Zona:</span>
-                <span class="dato-valor">${data.zona || 'No configurada'}</span>
+                <span class="dato-valor">${data.zona ? data.zona.toString().padStart(3, '0') : 'No configurada'}</span>
             </div>
             <div class="dato-item">
                 <span class="dato-label">Tipo Sensor:</span>

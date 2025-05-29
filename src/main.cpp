@@ -6,23 +6,23 @@
 #include <heltec.h>
 #include <EEPROM.h>
 
-// --- Instancia RF
+
 RCSwitch transmisorRF;
 
-// --- Variables
-String Version = "3.6.7.15";
+
+String Version = "3.7.8.16";
 const int EEPROM_SIZE = sizeof(SENSOR);
 boolean debug = true, variableDetectada = false, modoprog = false; 
 SENSOR activo{-1, -1, -1};
 
-// --- Pines (usando los definidos en main.h)
+
 const int BOTON_PRUEBA_PIN = 2;
-const int TRANSMISOR_RF_PIN = 33; // Asegúrate que coincide con tu hardware
+const int TRANSMISOR_RF_PIN = 33; 
 
 unsigned long tiempoUltimaImagen = 0;
 int imagenMostrada = 1;
 
-// --- Imágenes externas
+
 extern const unsigned char img1[], img2[], img3[], img4[], img5[], img6[], img7[], img8[];
 
 void imprimir(String m, String c ) {
