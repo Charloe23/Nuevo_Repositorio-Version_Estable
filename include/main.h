@@ -20,15 +20,14 @@
 
 // Configuración RF
 const int RF_BITS = 24;
-const int CODIGO_RF_PRUEBA = 33330001;
-const int CODIGO_RF_GAS = 33339001;  // Añade esta línea
-
 
 // Estructura de sensor
 struct SENSOR {
   int id;
   int zona;
   int tipo;
+  long codigoSensor;  // Código RF para detección de gas (ej. 33330125)
+  long codigoPrueba;  // Código RF para botón de prueba (ej. 33339125)
 };
 
 // Variables y funciones externas

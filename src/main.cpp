@@ -6,26 +6,26 @@
 #include <heltec.h>
 #include <EEPROM.h>
 
-
+// --- Instancia RF
 RCSwitch transmisorRF;
 
-
-String Version = "3.7.8.16";
+// --- Variables
+String Version = "3.6.7.15";
 const int EEPROM_SIZE = sizeof(SENSOR);
 boolean debug = true, variableDetectada = false, modoprog = false; 
-SENSOR activo{-1, -1, -1};
+SENSOR activo{-1, -1, -1, 33330125, 33339125}; // Valores por defecto con códigos RF
 
-
+// --- Pines (usando los definidos en main.h)
 const int BOTON_PRUEBA_PIN = 2;
-const int TRANSMISOR_RF_PIN = 33; 
+const int TRANSMISOR_RF_PIN = 33;
 
 unsigned long tiempoUltimaImagen = 0;
 int imagenMostrada = 1;
 
-
+// --- Imágenes externas
 extern const unsigned char img1[], img2[], img3[], img4[], img5[], img6[], img7[], img8[];
 
-void imprimir(String m, String c ) {
+void imprimir(String m, String c) {
     if (!debug) return;
     const char* col = "\033[0m";
     if (c == "rojo") col = "\033[31m";
@@ -38,13 +38,13 @@ void imprimir(String m, String c ) {
 void enviarPorLora(String mensaje) {
     Serial.println("[LoRa] " + mensaje);
     
-    // Enviar por RF si es una alerta importante
+    // Enviar por RF usando códigos de EEPROM
     if (mensaje.indexOf("ALERTA:") >= 0) {
-        transmisorRF.send(CODIGO_RF_GAS, RF_BITS);
-        Serial.println("[RF] Señal de alerta enviada: " + String(CODIGO_RF_GAS));
+        transmisorRF.send(activo.codigoSensor, RF_BITS);
+        Serial.println("[RF] Señal de alerta enviada: " + String(activo.codigoSensor));
     } else if (mensaje.indexOf("PRUEBA:") >= 0) {
-        transmisorRF.send(CODIGO_RF_PRUEBA, RF_BITS);
-        Serial.println("[RF] Señal de prueba enviada: " + String(CODIGO_RF_PRUEBA));
+        transmisorRF.send(activo.codigoPrueba, RF_BITS);
+        Serial.println("[RF] Señal de prueba enviada: " + String(activo.codigoPrueba));
     }
 }
 
@@ -141,11 +141,15 @@ void setup() {
     EEPROM.begin(EEPROM_SIZE);
     EEPROM.get(0, activo);
 
+    // Validar datos de EEPROM (incluyendo los códigos RF)
     if (activo.id < 1000 || activo.id > 9999 || 
         activo.zona < 1 || activo.zona > 510 ||
-        activo.tipo < 0 || activo.tipo > 9) {
+        activo.tipo < 0 || activo.tipo > 9 ||
+        activo.codigoSensor < 10000000 || activo.codigoSensor > 99999999 ||
+        activo.codigoPrueba < 10000000 || activo.codigoPrueba > 99999999) {
+        
         imprimir("Datos EEPROM inválidos, restaurando valores por defecto", "amarillo");
-        activo = {9999, 1, 9};
+        activo = {9999, 1, 9, 33330125, 33339125}; // Valores por defecto con códigos RF
         EEPROM.put(0, activo);
         EEPROM.commit();
     }
@@ -167,6 +171,8 @@ void setup() {
 
     imprimir("Sistema iniciado correctamente", "verde");
     imprimir("Transmisor RF configurado en pin " + String(TRANSMISOR_RF_PIN), "cyan");
+    imprimir("Código RF Sensor: " + String(activo.codigoSensor), "cyan");
+    imprimir("Código RF Prueba: " + String(activo.codigoPrueba), "cyan");
 }
 
 void loop() {
